@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ribbon
+      POSTGRES_PASSWORD: ribbon
+      POSTGRES_DB: ribbon
+    ports:
+      - "54329:5432"
+    volumes:
+      - ribbon_pg:/var/lib/postgresql/data
+
+volumes:
+  ribbon_pg:
