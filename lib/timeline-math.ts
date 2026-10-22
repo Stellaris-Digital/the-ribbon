@@ -18,6 +18,12 @@ export function panByPixels(view: TimeView, dx: number, width: number): TimeView
   return { startDay: view.startDay - shift, endDay: view.endDay - shift };
 }
 
+export function wheelPanPixels(deltaX: number, deltaY: number, deltaMode: number, width: number): number {
+  const raw = Math.abs(deltaX) >= Math.abs(deltaY) ? deltaX : deltaY;
+  const pixels = deltaMode === 1 ? raw * 16 : deltaMode === 2 ? raw * width : raw;
+  return -pixels;
+}
+
 export function decayVelocity(velocity: number, friction: number): number {
   return velocity * friction;
 }

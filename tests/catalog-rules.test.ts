@@ -4,7 +4,7 @@ import { eventMatchesRibbon } from "@/lib/filters";
 import { labelBox, layoutRibbon } from "@/lib/layout";
 import { placeNameAt } from "@/lib/places";
 import { canDeleteNode, eventColor, wouldCreateCycle } from "@/lib/trees";
-import { axisTicks, clampView, decayVelocity, fitCatalog, panByPixels, zoomAt } from "@/lib/timeline-math";
+import { axisTicks, clampView, decayVelocity, fitCatalog, panByPixels, wheelPanPixels, zoomAt } from "@/lib/timeline-math";
 import { daysFromCivil } from "@/lib/dates";
 import { parseViewState, serializeViewState } from "@/lib/url-state";
 
@@ -134,6 +134,13 @@ describe("timeline math", () => {
     expect(next.endDay).toBe(900);
     expect(decayVelocity(10, 0.9)).toBeCloseTo(9);
     expect(Math.abs(decayVelocity(0.05, 0.9))).toBeLessThan(0.1);
+  });
+
+  it("turns a shift-scroll into a horizontal pan", () => {
+    expect(wheelPanPixels(0, 100, 0, 800)).toBe(-100);
+    expect(wheelPanPixels(40, 10, 0, 800)).toBe(-40);
+    expect(wheelPanPixels(0, 2, 1, 800)).toBe(-32);
+    expect(wheelPanPixels(0, 1, 2, 800)).toBe(-800);
   });
 
   it("labels century-scale axes with years", () => {

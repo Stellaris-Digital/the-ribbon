@@ -11,7 +11,7 @@ import { eventMatchesRibbon } from "@/lib/filters";
 import { layoutRibbon } from "@/lib/layout";
 import { placeNameAt } from "@/lib/places";
 import { eventColor } from "@/lib/trees";
-import { clampView, decayVelocity, fitCatalog, panByPixels, zoomAt, type TimeView } from "@/lib/timeline-math";
+import { clampView, decayVelocity, fitCatalog, panByPixels, wheelPanPixels, zoomAt, type TimeView } from "@/lib/timeline-math";
 import { defaultViewState, parseViewState, serializeViewState, type RibbonState } from "@/lib/url-state";
 
 type UiRibbon = RibbonState & { key: string };
@@ -167,11 +167,35 @@ export function TimelineApp({ catalog, initialQuery }: { catalog: Catalog; initi
     let drag: { lastX: number; lastT: number; moved: number } | null = null;
     let velocity = 0;
     let inertia = 0;
+    let coastTimer = 0;
+    let lastWheelT = 0;
 
     const stopInertia = () => {
       if (inertia) cancelAnimationFrame(inertia);
       inertia = 0;
       velocity = 0;
+      lastWheelT = 0;
+      window.clearTimeout(coastTimer);
+    };
+    const coast = () => {
+      if (reduced || Math.abs(velocity) < 0.02) {
+        velocity = 0;
+        return;
+      }
+      let last = performance.now();
+      const step = (now: number) => {
+        const dt = now - last;
+        last = now;
+        velocity = decayVelocity(velocity, Math.pow(0.92, dt / 16.67));
+        if (Math.abs(velocity) < 0.01) {
+          inertia = 0;
+          return;
+        }
+        const currentWidth = canvas.getBoundingClientRect().width || 1;
+        setView((current) => clampView(panByPixels(current, velocity * dt, currentWidth), bounds, 1));
+        inertia = requestAnimationFrame(step);
+      };
+      inertia = requestAnimationFrame(step);
     };
     const point = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
@@ -182,8 +206,24 @@ export function TimelineApp({ catalog, initialQuery }: { catalog: Catalog; initi
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      stopInertia();
       const rect = canvas.getBoundingClientRect();
+      if (event.shiftKey && pointers.size === 0) {
+        if (inertia) cancelAnimationFrame(inertia);
+        inertia = 0;
+        window.clearTimeout(coastTimer);
+        const width = rect.width || 1;
+        const dx = wheelPanPixels(event.deltaX, event.deltaY, event.deltaMode, width);
+        const dt = event.timeStamp - lastWheelT;
+        velocity = dt > 0 && dt < 100 ? dx / dt : 0;
+        lastWheelT = event.timeStamp;
+        setView((current) => clampView(panByPixels(current, dx, width), bounds, 1));
+        coastTimer = window.setTimeout(() => {
+          lastWheelT = 0;
+          coast();
+        }, 100);
+        return;
+      }
+      stopInertia();
       const ratio = (event.clientX - rect.left) / rect.width;
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
       const factor = Math.min(4, Math.max(0.25, Math.exp(-delta * 0.0012)));
@@ -248,21 +288,7 @@ export function TimelineApp({ catalog, initialQuery }: { catalog: Catalog; initi
         velocity = 0;
         return;
       }
-      if (reduced || Math.abs(velocity) < 0.02) return;
-      let last = performance.now();
-      const step = (now: number) => {
-        const dt = now - last;
-        last = now;
-        velocity = decayVelocity(velocity, Math.pow(0.92, dt / 16.67));
-        if (Math.abs(velocity) < 0.01) {
-          inertia = 0;
-          return;
-        }
-        const currentWidth = canvas.getBoundingClientRect().width || 1;
-        setView((current) => clampView(panByPixels(current, velocity * dt, currentWidth), bounds, 1));
-        inertia = requestAnimationFrame(step);
-      };
-      inertia = requestAnimationFrame(step);
+      coast();
     };
 
     canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -329,7 +355,7 @@ export function TimelineApp({ catalog, initialQuery }: { catalog: Catalog; initi
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e6dcc8] px-4 py-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">The Ribbon</h1>
-          <p className="text-sm text-stone-600">Scroll to zoom. Drag to pan. The ribbons share one time scale.</p>
+          <p className="text-sm text-stone-600">Scroll to zoom. Drag, or hold Shift and scroll, to pan. The ribbons share one time scale.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
